@@ -36,9 +36,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
         const variants = {
             default:
-                "border-2 border-gray-300 bg-white focus:border-blue-600 dark:border-gray-600 dark:bg-gray-800",
+                "border-2 border-gray-300 bg-white focus:border-orange-500 dark:border-gray-600 dark:bg-gray-800",
             filled:
-                "border-0 bg-gray-100 focus:bg-white focus:ring-2 focus:ring-blue-600 dark:bg-gray-800 dark:focus:bg-gray-700",
+                "border-0 bg-gray-100 focus:bg-white focus:ring-2 focus:ring-orange-500 dark:bg-gray-800 dark:focus:bg-gray-700",
         };
 
         const errorStyles = error
