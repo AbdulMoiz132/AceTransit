@@ -144,22 +144,24 @@ export default function Dashboard() {
                   {/* Route visualization */}
                   <svg
                     className="absolute -left-16 top-1/2 -translate-y-1/2"
-                    width="100"
-                    height="100"
+                    width="180"
+                    height="120"
+                    viewBox="0 0 180 120"
                   >
                     <motion.path
-                      d="M 10 50 Q 50 10, 90 50"
+                      d="M 10 40 Q 60 10, 90 50 Q 120 90, 190 60"
                       stroke="white"
                       strokeWidth="2"
                       fill="none"
                       strokeDasharray="5,5"
+                      style={{ y: 30 }} 
                       initial={{ pathLength: 0 }}
                       animate={{ pathLength: 1 }}
                       transition={{ duration: 2, repeat: Infinity }}
                     />
                   </svg>
                   <MapPin className="absolute -left-20 top-1/3 h-8 w-8 text-white" />
-                  <MapPin className="absolute -right-8 top-2/3 h-8 w-8 text-white" />
+                  <MapPin className="absolute -right-6 top-2/3 h-8 w-8 text-white" />
                 </motion.div>
               </div>
             </div>
@@ -233,7 +235,7 @@ export default function Dashboard() {
                   variant="elevated"
                   padding="md"
                   hoverable
-                  onClick={() => router.push(`/tracking/${shipment.id}`)}
+                  onClick={() => router.push(`/tracking?order=${shipment.id}`)}
                   className="cursor-pointer"
                 >
                   <div className="flex items-start justify-between">

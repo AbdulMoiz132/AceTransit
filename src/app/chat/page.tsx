@@ -15,7 +15,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 
 interface Message {
@@ -91,11 +90,12 @@ export default function Chat() {
   const handleSend = () => {
     if (!input.trim()) return;
 
+    const now = new Date();
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       type: "user",
       content: input,
-      timestamp: new Date(),
+      timestamp: now,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -105,7 +105,7 @@ export default function Chat() {
     // Simulate bot typing and response
     setTimeout(() => {
       const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
+        id: crypto.randomUUID(),
         type: "bot",
         content: generateBotResponse(input),
         timestamp: new Date(),

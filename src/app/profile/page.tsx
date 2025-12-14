@@ -20,6 +20,7 @@ import {
   Star,
   TrendingUp,
   Clock,
+  ChevronLeft,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -73,7 +74,16 @@ export default function Profile() {
       <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white pt-12 pb-32 px-4">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-bold">Profile</h1>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                title="Back to Dashboard"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <h1 className="text-2xl font-bold">Profile</h1>
+            </div>
             <Button
               variant="ghost"
               size="sm"
