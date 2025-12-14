@@ -113,7 +113,7 @@ export default function Profile() {
                   <p className="text-white/80 text-sm">Member since {user.memberSince}</p>
                 </div>
 
-                <Badge variant="default" className="bg-white/20 border-white/30">
+                <Badge variant="neutral" className="bg-white/20 border-white/30">
                   Premium
                 </Badge>
               </div>

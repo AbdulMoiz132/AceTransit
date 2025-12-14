@@ -174,10 +174,10 @@ export default function Dashboard() {
             
             {/* Feature tags */}
             <div className="mt-4 flex flex-wrap gap-2">
-              <Badge variant="default" className="bg-white/20 text-white border-white/30">
+              <Badge variant="neutral" className="bg-white/20 text-white border-white/30">
                 Fast and secure
               </Badge>
-              <Badge variant="default" className="bg-white/20 text-white border-white/30">
+              <Badge variant="neutral" className="bg-white/20 text-white border-white/30">
                 Real-time tracking
               </Badge>
             </div>
