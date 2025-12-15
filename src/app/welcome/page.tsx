@@ -41,12 +41,12 @@ export default function Welcome() {
     if (currentStep < onboardingSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      router.push("/auth/signup");
+      router.push("/auth/login");
     }
   };
 
   const handleSkip = () => {
-    router.push("/auth/signup");
+    router.push("/auth/login");
   };
 
   const step = onboardingSteps[currentStep];

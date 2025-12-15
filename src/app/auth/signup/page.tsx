@@ -4,24 +4,54 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, Eye, EyeOff, AlertCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Card from "@/components/ui/Card";
+import { authService } from "@/lib/auth";
 
 export default function Signup() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would handle actual signup logic
-    router.push("/dashboard");
+    setLoading(true);
+    setError(null);
+
+    try {
+      await authService.signUp({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.name,
+      });
+      
+      // Redirect to login after successful signup
+      router.push("/auth/login");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sign up. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await authService.signInWithProvider("google");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sign in with Google.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -47,6 +77,18 @@ export default function Signup() {
             <p className="text-gray-600">Join AceTransit for smart deliveries</p>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg"
+            >
+              <AlertCircle className="h-5 w-5 flex-shrink-0" />
+              <p className="text-sm">{error}</p>
+            </motion.div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -60,6 +102,7 @@ export default function Signup() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 leftIcon={<User className="h-5 w-5" />}
                 required
+                disabled={loading}
               />
             </div>
 
@@ -74,6 +117,7 @@ export default function Signup() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 leftIcon={<Mail className="h-5 w-5" />}
                 required
+                disabled={loading}
               />
             </div>
 
@@ -92,6 +136,7 @@ export default function Signup() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="text-gray-500 hover:text-gray-700"
+                    disabled={loading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -101,7 +146,11 @@ export default function Signup() {
                   </button>
                 }
                 required
+                disabled={loading}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Must be at least 6 characters
+              </p>
             </div>
 
             <Button
@@ -109,8 +158,9 @@ export default function Signup() {
               size="lg"
               rightIcon={<ArrowRight className="h-5 w-5" />}
               className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+              disabled={loading}
             >
-              Sign Up
+              {loading ? "Creating account..." : "Sign Up"}
             </Button>
           </form>
 
@@ -125,11 +175,12 @@ export default function Signup() {
           </div>
 
           {/* Social Login */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <Button
               variant="outline"
-              onClick={() => {}}
+              onClick={handleGoogleSignIn}
               className="w-full"
+              disabled={loading}
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                 <path
@@ -149,17 +200,7 @@ export default function Signup() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              Google
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {}}
-              className="w-full"
-            >
-              <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              Facebook
+              Continue with Google
             </Button>
           </div>
 

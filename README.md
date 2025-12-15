@@ -4,13 +4,14 @@
   <img src="https://img.shields.io/badge/Next.js-16.0-black?style=for-the-badge&logo=next.js" />
   <img src="https://img.shields.io/badge/React-19.2-blue?style=for-the-badge&logo=react" />
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript" />
+  <img src="https://img.shields.io/badge/Supabase-Latest-3ECF8E?style=for-the-badge&logo=supabase" />
   <img src="https://img.shields.io/badge/TailwindCSS-4.0-38B2AC?style=for-the-badge&logo=tailwind-css" />
   <img src="https://img.shields.io/badge/Framer_Motion-12.0-FF0055?style=for-the-badge&logo=framer" />
 </div>
 
 ## 📖 Overview
 
-**AceTransit** is a cutting-edge, intelligent courier web application designed to revolutionize the delivery experience. Built with modern web technologies, it offers a sleek, vibrant, and extremely user-friendly interface with powerful features including AI-powered chatbot assistance, real-time tracking, automatic bill calculation, and smart location detection.
+**AceTransit** is a cutting-edge, intelligent courier web application designed to revolutionize the delivery experience. Built with modern web technologies and powered by Supabase, it offers a sleek, vibrant, and extremely user-friendly interface with powerful features including real-time authentication, AI-powered chatbot assistance, live tracking, automatic bill calculation, and smart location detection.
 
 ### ✨ Key Features
 
@@ -21,8 +22,9 @@
 - **📊 Advanced Order Tracking** - Real-time movement tracking with progress stages and courier details
 - **🎨 Modern UI/UX** - Vibrant orange color scheme with smooth animations and micro-interactions
 - **📱 Fully Responsive** - Optimized for desktop, tablet, and mobile devices
-- **🔐 Authentication System** - Secure login/signup with social authentication options
-- **👤 User Profiles** - Comprehensive profile management with order history
+- **🔐 Full Authentication** - Email/password and Google OAuth with Supabase
+- **👤 User Profiles** - Comprehensive profile management with real-time data sync
+- **🗄️ Database Integration** - PostgreSQL database with Row Level Security
 
 ## 🎨 Design Philosophy
 
@@ -39,6 +41,14 @@ The application follows strong principles of:
 - **React 19.2** - UI library
 - **TypeScript 5.0** - Type safety
 
+### Backend & Database
+- **Supabase** - Backend as a Service
+  - PostgreSQL Database
+  - Authentication (Email, Google OAuth)
+  - Row Level Security
+  - Real-time subscriptions
+  - RESTful API
+
 ### Styling
 - **Tailwind CSS 4.0** - Utility-first CSS framework
 - **Framer Motion 12.0** - Animation library
@@ -46,6 +56,8 @@ The application follows strong principles of:
 
 ### Utilities
 - **clsx & tailwind-merge** - Conditional class management
+- **@supabase/ssr** - Server-side rendering support
+- **@supabase/supabase-js** - Supabase client library
 
 ## 📂 Project Structure
 
@@ -88,6 +100,7 @@ AceTransit/
 
 - Node.js 18.0 or higher
 - npm, yarn, or pnpm
+- Supabase account (free tier available)
 
 ### Installation
 
@@ -100,22 +113,32 @@ AceTransit/
 2. **Install dependencies**
    ```bash
    npm install
-   # or
-   yarn install
-   # or
-   pnpm install
    ```
 
-3. **Run the development server**
+3. **Set up Supabase**
+   - Follow the detailed guide in [SUPABASE_SETUP.md](SUPABASE_SETUP.md)
+   - Create a Supabase project
+   - Run the SQL schema from `supabase-schema.sql`
+   - Configure authentication providers
+   - Copy your API keys
+
+4. **Configure environment variables**
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   
+   Edit `.env.local` and add your Supabase credentials:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   ```
+
+5. **Run the development server**
    ```bash
    npm run dev
-   # or
-   yarn dev
-   # or
-   pnpm dev
    ```
 
-4. **Open your browser**
+6. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
 ### Build for Production

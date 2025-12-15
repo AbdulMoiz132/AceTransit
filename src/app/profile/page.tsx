@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import {
   User,
   Mail,
@@ -21,23 +22,20 @@ import {
   TrendingUp,
   Clock,
   ChevronLeft,
+  Loader2,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
-
-const stats = [
-  { label: "Total Deliveries", value: "18", icon: Package, color: "from-blue-500 to-blue-600" },
-  { label: "On Time Rate", value: "98%", icon: TrendingUp, color: "from-green-500 to-green-600" },
-  { label: "Active Orders", value: "2", icon: Clock, color: "from-orange-500 to-orange-600" },
-];
+import { authService } from "@/lib/auth";
+import type { Profile } from "@/lib/types/database";
 
 const menuSections = [
   {
     title: "Account",
     items: [
       { icon: User, label: "Personal Information", href: "/profile/edit", badge: null },
-      { icon: MapPin, label: "Saved Addresses", href: "/profile/addresses", badge: "3" },
+      { icon: MapPin, label: "Saved Addresses", href: "/profile/addresses", badge: null },
       { icon: CreditCard, label: "Payment Methods", href: "/profile/payment", badge: null },
     ],
   },
@@ -59,14 +57,58 @@ const menuSections = [
 
 export default function Profile() {
   const router = useRouter();
-  const [user] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+92 300 1234567",
-    avatar: null,
-    memberSince: "January 2024",
-    rating: 4.9,
-  });
+  const [user, setUser] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const stats = [
+    { label: "Total Deliveries", value: "0", icon: Package, color: "from-blue-500 to-blue-600" },
+    { label: "On Time Rate", value: "100%", icon: TrendingUp, color: "from-green-500 to-green-600" },
+    { label: "Active Orders", value: "0", icon: Clock, color: "from-orange-500 to-orange-600" },
+  ];
+
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser) {
+          const profile = await authService.getUserProfile(currentUser.id);
+          setUser(profile);
+          
+          // Load user stats (deliveries count, etc.)
+          // This would be from your deliveries table
+          // For now, keeping default values
+        }
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+        router.push("/auth/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserProfile();
+  }, [router]);
+
+  const handleLogout = async () => {
+    try {
+      await authService.signOut();
+      router.push("/auth/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to logout:", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 pb-24">
@@ -104,27 +146,42 @@ export default function Profile() {
               <div className="flex items-start gap-4">
                 {/* Avatar */}
                 <div className="relative">
-                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-white/30 to-white/10 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border-4 border-white/20">
-                    {user.name.charAt(0)}
-                  </div>
-                  <button className="absolute bottom-0 right-0 h-7 w-7 bg-white text-orange-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
+                  {user.avatar_url ? (
+                    <Image 
+                      src={user.avatar_url} 
+                      alt={user.full_name || "User"}
+                      width={80}
+                      height={80}
+                      className="h-20 w-20 rounded-full border-4 border-white/20 object-cover"
+                    />
+                  ) : (
+                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-white/30 to-white/10 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border-4 border-white/20">
+                      {(user.full_name || user.email).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <button 
+                    className="absolute bottom-0 right-0 h-7 w-7 bg-white text-orange-600 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                    aria-label="Change avatar"
+                  >
                     <Camera className="h-4 w-4" />
                   </button>
                 </div>
 
                 {/* Info */}
                 <div className="flex-1">
-                  <h2 className="text-2xl font-bold mb-1">{user.name}</h2>
+                  <h2 className="text-2xl font-bold mb-1">{user.full_name || "User"}</h2>
                   <div className="flex items-center gap-1 mb-2">
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">{user.rating}</span>
+                    <span className="font-semibold">5.0</span>
                     <span className="text-white/70 text-sm ml-1">Customer Rating</span>
                   </div>
-                  <p className="text-white/80 text-sm">Member since {user.memberSince}</p>
+                  <p className="text-white/80 text-sm">
+                    Member since {new Date(user.created_at).getFullYear()}
+                  </p>
                 </div>
 
                 <Badge variant="neutral" className="bg-white/20 border-white/30">
-                  Premium
+                  Member
                 </Badge>
               </div>
 
@@ -134,10 +191,12 @@ export default function Profile() {
                   <Mail className="h-4 w-4 text-white/70" />
                   <span>{user.email}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4 text-white/70" />
-                  <span>{user.phone}</span>
-                </div>
+                {user.phone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone className="h-4 w-4 text-white/70" />
+                    <span>{user.phone}</span>
+                  </div>
+                )}
               </div>
             </Card>
           </motion.div>
@@ -217,7 +276,7 @@ export default function Profile() {
             variant="outline"
             size="lg"
             leftIcon={<LogOut className="h-5 w-5" />}
-            onClick={() => router.push("/auth/login")}
+            onClick={handleLogout}
             className="w-full border-2 border-red-500 text-red-600 hover:bg-red-50"
           >
             Logout
