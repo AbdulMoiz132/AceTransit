@@ -1,120 +1,61 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useBookingStore } from "@/store/bookingStore";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MapPin,
-  Navigation,
-  Package,
-  Weight,
-  Calendar,
-  Clock,
-  ArrowRight,
-  ChevronLeft,
-  Home,
-  Building2,
-  Zap,
-  Truck,
-  Phone,
-  User,
-  AlertCircle,
-  CheckCircle,
+  MapPin, Navigation, Package, Weight, Calendar, Clock,
+  ArrowRight, ChevronLeft, Home, Building2, Zap, Truck,
+  Phone, User, AlertCircle, CheckCircle
 } from "lucide-react";
+
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Badge from "@/components/ui/Badge";
 import {
-  getCoordinates,
-  calculateDistance,
-  calculateDeliveryFee,
-  Coordinates,
-  reverseGeocode,
+  getCoordinates, calculateDistance, calculateDeliveryFee,
+  Coordinates, reverseGeocode
 } from "@/lib/distance";
-
-interface BookingFormData {
-  // Sender
-  senderName: string;
-  senderPhone: string;
-  pickupAddress: string;
-  pickupCity: string;
-  pickupCoordinates?: Coordinates;
-  
-  // Receiver
-  receiverName: string;
-  receiverPhone: string;
-  dropoffAddress: string;
-  dropoffCity: string;
-  dropoffCoordinates?: Coordinates;
-  
-  // Package
-  packageType: string;
-  weight: string;
-  dimensions: {
-    length: string;
-    width: string;
-    height: string;
-  };
-  deliverySpeed: "standard" | "express" | "fast-track";
-  pickupDate: string;
-  pickupTime: string;
-  
-  // Calculated
-  distance?: number;
-  estimatedCost?: number;
-}
 
 const deliveryOptions = [
   {
     id: "standard",
     name: "Standard",
-    description: "Regular delivery",
-    icon: Package,
-    multiplier: 1,
+    icon: Truck,
     color: "from-blue-400 to-blue-500",
+    description: "Reliable delivery in 4-6 business days",
   },
   {
     id: "express",
     name: "Express",
-    description: "Priority delivery",
-    icon: Truck,
-    multiplier: 1.5,
-    color: "from-purple-400 to-purple-500",
+    icon: Zap,
+    color: "from-orange-400 to-orange-500",
+    description: "Faster delivery in 2-3 business days",
   },
   {
     id: "fast-track",
     name: "Fast Track",
-    description: "Urgent delivery",
     icon: Zap,
-    multiplier: 2,
-    color: "from-orange-400 to-red-500",
+    color: "from-red-400 to-red-500",
+    description: "Urgent next-day delivery",
   },
 ];
 
 export default function Booking() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const {
+    step, setStep, nextStep, prevStep,
+    formData, updateFormData,
+    deliveryFee, setDeliveryFee,
+    isAutoMode // We might use this to trigger animations or effects
+  } = useBookingStore();
+
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [deliveryFee, setDeliveryFee] = useState<ReturnType<typeof calculateDeliveryFee> | null>(null);
-  
-  const [formData, setFormData] = useState<BookingFormData>({
-    senderName: "",
-    senderPhone: "",
-    pickupAddress: "",
-    pickupCity: "",
-    receiverName: "",
-    receiverPhone: "",
-    dropoffAddress: "",
-    dropoffCity: "",
-    packageType: "parcel",
-    weight: "",
-    dimensions: { length: "", width: "", height: "" },
-    deliverySpeed: "standard",
-    pickupDate: "",
-    pickupTime: "",
-  });
+
+  // No local state for formData anymore!
+
 
   const detectLocation = async () => {
     setIsDetectingLocation(true);
@@ -126,25 +67,23 @@ export default function Booking() {
               lat: position.coords.latitude,
               lng: position.coords.longitude,
             };
-            
+
             // Reverse geocode to get actual address
             const locationData = await reverseGeocode(coords);
-            
+
             if (locationData) {
-              setFormData((prev) => ({
-                ...prev,
+              updateFormData({
                 pickupAddress: locationData.address,
                 pickupCity: locationData.city,
                 pickupCoordinates: coords,
-              }));
+              });
             } else {
               // Fallback if reverse geocoding fails
-              setFormData((prev) => ({
-                ...prev,
+              updateFormData({
                 pickupAddress: `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
                 pickupCity: "Pakistan",
                 pickupCoordinates: coords,
-              }));
+              });
             }
             setIsDetectingLocation(false);
           },
@@ -200,13 +139,12 @@ export default function Booking() {
             const distance = calculateDistance(pickupCoords, dropoffCoords);
             const fee = calculateDeliveryFee(distance, formData.deliverySpeed);
 
-            setFormData((prev) => ({
-              ...prev,
+            updateFormData({
               pickupCoordinates: pickupCoords!,
               dropoffCoordinates: dropoffCoords!,
               distance,
               estimatedCost: fee.total,
-            }));
+            });
 
             setDeliveryFee(fee);
           }
@@ -221,7 +159,7 @@ export default function Booking() {
     // Debounce the calculation
     const timer = setTimeout(calculateDistanceAndCost, 1000);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     formData.pickupAddress,
     formData.pickupCity,
@@ -230,9 +168,29 @@ export default function Booking() {
     formData.deliverySpeed,
   ]);
 
+  const validateStep = (currentStep: number) => {
+    switch (currentStep) {
+      case 1:
+        return !!(formData.senderName && formData.senderPhone && formData.pickupAddress && formData.pickupCity);
+      case 2:
+        return !!(formData.receiverName && formData.receiverPhone && formData.dropoffAddress && formData.dropoffCity);
+      case 3:
+        return !!formData.weight;
+      case 4:
+        return !!(formData.pickupDate && formData.pickupTime);
+      default:
+        return false;
+    }
+  };
+
   const handleNext = () => {
+    if (!validateStep(step)) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
     if (step < 4) {
-      setStep(step + 1);
+      nextStep();
     } else {
       // Save booking data to localStorage for payment page
       localStorage.setItem("bookingData", JSON.stringify({ formData, deliveryFee }));
@@ -242,7 +200,7 @@ export default function Booking() {
 
   const handleBack = () => {
     if (step > 1) {
-      setStep(step - 1);
+      prevStep();
     } else {
       router.back();
     }
@@ -269,11 +227,10 @@ export default function Booking() {
             {[1, 2, 3, 4].map((s) => (
               <div key={s} className="flex-1">
                 <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    s <= step
-                      ? "bg-gradient-to-r from-orange-500 to-red-500"
-                      : "bg-gray-200"
-                  }`}
+                  className={`h-2 rounded-full transition-all duration-300 ${s <= step
+                    ? "bg-gradient-to-r from-orange-500 to-red-500"
+                    : "bg-gray-200"
+                    }`}
                 />
               </div>
             ))}
@@ -318,7 +275,7 @@ export default function Booking() {
                     <Input
                       placeholder="Enter your name"
                       value={formData.senderName}
-                      onChange={(e) => setFormData({ ...formData, senderName: e.target.value })}
+                      onChange={(e) => updateFormData({ senderName: e.target.value })}
                       leftIcon={<User className="h-5 w-5" />}
                     />
                   </div>
@@ -331,7 +288,7 @@ export default function Booking() {
                       type="tel"
                       placeholder="03XX-XXXXXXX"
                       value={formData.senderPhone}
-                      onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })}
+                      onChange={(e) => updateFormData({ senderPhone: e.target.value })}
                       leftIcon={<Phone className="h-5 w-5" />}
                     />
                   </div>
@@ -342,6 +299,7 @@ export default function Booking() {
                         Pickup Address *
                       </label>
                       <Button
+                        id="detect-location-btn"
                         size="sm"
                         variant="outline"
                         leftIcon={<Navigation className="h-4 w-4" />}
@@ -356,7 +314,7 @@ export default function Booking() {
                       placeholder="House/Building, Street, Area"
                       value={formData.pickupAddress}
                       onChange={(e) =>
-                        setFormData({ ...formData, pickupAddress: e.target.value })
+                        updateFormData({ pickupAddress: e.target.value })
                       }
                       leftIcon={<MapPin className="h-5 w-5" />}
                     />
@@ -370,7 +328,7 @@ export default function Booking() {
                       placeholder="e.g., Karachi, Lahore, Islamabad"
                       value={formData.pickupCity}
                       onChange={(e) =>
-                        setFormData({ ...formData, pickupCity: e.target.value })
+                        updateFormData({ pickupCity: e.target.value })
                       }
                       leftIcon={<Building2 className="h-5 w-5" />}
                     />
@@ -419,7 +377,7 @@ export default function Booking() {
                     <Input
                       placeholder="Enter receiver's name"
                       value={formData.receiverName}
-                      onChange={(e) => setFormData({ ...formData, receiverName: e.target.value })}
+                      onChange={(e) => updateFormData({ receiverName: e.target.value })}
                       leftIcon={<User className="h-5 w-5" />}
                     />
                   </div>
@@ -432,7 +390,7 @@ export default function Booking() {
                       type="tel"
                       placeholder="03XX-XXXXXXX"
                       value={formData.receiverPhone}
-                      onChange={(e) => setFormData({ ...formData, receiverPhone: e.target.value })}
+                      onChange={(e) => updateFormData({ receiverPhone: e.target.value })}
                       leftIcon={<Phone className="h-5 w-5" />}
                     />
                   </div>
@@ -445,7 +403,7 @@ export default function Booking() {
                       placeholder="House/Building, Street, Area"
                       value={formData.dropoffAddress}
                       onChange={(e) =>
-                        setFormData({ ...formData, dropoffAddress: e.target.value })
+                        updateFormData({ dropoffAddress: e.target.value })
                       }
                       leftIcon={<MapPin className="h-5 w-5" />}
                     />
@@ -459,7 +417,7 @@ export default function Booking() {
                       placeholder="e.g., Karachi, Lahore, Islamabad"
                       value={formData.dropoffCity}
                       onChange={(e) =>
-                        setFormData({ ...formData, dropoffCity: e.target.value })
+                        updateFormData({ dropoffCity: e.target.value })
                       }
                       leftIcon={<Building2 className="h-5 w-5" />}
                     />
@@ -526,7 +484,7 @@ export default function Booking() {
                     </label>
                     <select
                       value={formData.packageType}
-                      onChange={(e) => setFormData({ ...formData, packageType: e.target.value })}
+                      onChange={(e) => updateFormData({ packageType: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     >
                       <option value="parcel">Parcel</option>
@@ -545,7 +503,7 @@ export default function Booking() {
                       type="number"
                       placeholder="Enter weight"
                       value={formData.weight}
-                      onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                      onChange={(e) => updateFormData({ weight: e.target.value })}
                       leftIcon={<Weight className="h-5 w-5" />}
                     />
                   </div>
@@ -560,8 +518,7 @@ export default function Booking() {
                         placeholder="Length"
                         value={formData.dimensions.length}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          updateFormData({
                             dimensions: { ...formData.dimensions, length: e.target.value },
                           })
                         }
@@ -571,8 +528,7 @@ export default function Booking() {
                         placeholder="Width"
                         value={formData.dimensions.width}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          updateFormData({
                             dimensions: { ...formData.dimensions, width: e.target.value },
                           })
                         }
@@ -582,8 +538,7 @@ export default function Booking() {
                         placeholder="Height"
                         value={formData.dimensions.height}
                         onChange={(e) =>
-                          setFormData({
-                            ...formData,
+                          updateFormData({
                             dimensions: { ...formData.dimensions, height: e.target.value },
                           })
                         }
@@ -619,19 +574,17 @@ export default function Booking() {
                       <button
                         key={option.id}
                         onClick={() => {
-                          setFormData({
-                            ...formData,
+                          updateFormData({
                             deliverySpeed: option.id as "standard" | "express" | "fast-track",
                           });
                           if (optionFee) {
                             setDeliveryFee(optionFee);
                           }
                         }}
-                        className={`w-full p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${
-                          formData.deliverySpeed === option.id
-                            ? "border-orange-500 bg-orange-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
+                        className={`w-full p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${formData.deliverySpeed === option.id
+                          ? "border-orange-500 bg-orange-50"
+                          : "border-gray-200 hover:border-gray-300"
+                          }`}
                       >
                         <div
                           className={`h-12 w-12 rounded-xl bg-gradient-to-br ${option.color} flex items-center justify-center flex-shrink-0`}
@@ -676,7 +629,7 @@ export default function Booking() {
                     <Input
                       type="date"
                       value={formData.pickupDate}
-                      onChange={(e) => setFormData({ ...formData, pickupDate: e.target.value })}
+                      onChange={(e) => updateFormData({ pickupDate: e.target.value })}
                       leftIcon={<Calendar className="h-5 w-5" />}
                       min={new Date().toISOString().split("T")[0]}
                     />
@@ -686,7 +639,7 @@ export default function Booking() {
                     <Input
                       type="time"
                       value={formData.pickupTime}
-                      onChange={(e) => setFormData({ ...formData, pickupTime: e.target.value })}
+                      onChange={(e) => updateFormData({ pickupTime: e.target.value })}
                       leftIcon={<Clock className="h-5 w-5" />}
                     />
                   </div>
@@ -777,26 +730,16 @@ export default function Booking() {
             size="lg"
             rightIcon={<ArrowRight className="h-5 w-5" />}
             onClick={handleNext}
-            disabled={
-              (step === 1 &&
-                (!formData.senderName ||
-                  !formData.senderPhone ||
-                  !formData.pickupAddress ||
-                  !formData.pickupCity)) ||
-              (step === 2 &&
-                (!formData.receiverName ||
-                  !formData.receiverPhone ||
-                  !formData.dropoffAddress ||
-                  !formData.dropoffCity)) ||
-              (step === 3 && !formData.weight) ||
-              (step === 4 && (!formData.pickupDate || !formData.pickupTime))
-            }
+            disabled={!validateStep(step)}
+
             className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
           >
             {step === 4 ? "Proceed to Payment" : "Continue"}
           </Button>
         </motion.div>
       </div>
+
     </div>
+
   );
 }
