@@ -78,15 +78,19 @@ export async function geocodeAddress(
 
 /**
  * Reverse geocode coordinates to get address using Nominatim API
- * Returns address details for the coordinates
+ * Returns address details for the coordinates with maximum precision and consistency
  */
 export async function reverseGeocode(
   coordinates: Coordinates
 ): Promise<{ address: string; city: string } | null> {
   try {
-    // Use zoom=18 for building-level detail and addressdetails=1 for full breakdown
+    // Round coordinates to 5 decimal places for consistency (approximately 1.1 meters precision)
+    const lat = Number(coordinates.lat.toFixed(5));
+    const lng = Number(coordinates.lng.toFixed(5));
+
+    // Use zoom=18 for stable building-level detail
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coordinates.lat}&lon=${coordinates.lng}&zoom=18&addressdetails=1&extratags=1`,
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&extratags=1&namedetails=1`,
       {
         headers: {
           "User-Agent": "AceTransit-Courier-App",
@@ -98,41 +102,84 @@ export async function reverseGeocode(
 
     if (data) {
       const addr = data.address || {};
+      const nameDetails = data.namedetails || {};
+      const extraTags = data.extratags || {};
       
-      // Try to extract the most specific location name from display_name
-      // display_name format: "Specific Place, Road, Area, City, Region, Country"
-      let specificLocation = "";
-      if (data.display_name) {
-        const parts = data.display_name.split(",").map((p: string) => p.trim());
-        // Take first 3-4 most specific parts
-        specificLocation = parts.slice(0, Math.min(4, parts.length)).join(", ");
+      console.log("🗺️ Raw geocode data:", data);
+      
+      // Build address with comprehensive field checking for Pakistani locations
+      const addressComponents = [];
+      
+      // 1. Specific building/POI name
+      const specificName = 
+        data.name ||
+        nameDetails.name || 
+        nameDetails["name:en"] ||
+        extraTags.official_name ||
+        extraTags.alt_name ||
+        addr.hostel ||
+        addr.dormitory ||
+        addr.building && addr.building !== "yes" && addr.building !== "residential" ? addr.building : null;
+      
+      if (specificName) {
+        addressComponents.push(specificName);
       }
       
-      // Build a detailed, readable address prioritizing specific locations
-      const addressParts = [
-        // Specific building/amenity names (hostels, universities, etc.)
-        addr.amenity,
-        addr.building,
-        addr.university,
-        addr.college,
-        addr.tourism,
-        addr.leisure,
-        // Street address
-        addr.house_number,
-        addr.road || addr.street,
-        // Area information
-        addr.neighbourhood || addr.suburb || addr.quarter || addr.hamlet,
-        addr.city_district,
-      ].filter(Boolean);
+      // 2. University/Institution
+      const institution = addr.university || addr.college || addr.school;
+      if (institution && !addressComponents.some(c => c.toLowerCase().includes(institution.toLowerCase()))) {
+        addressComponents.push(institution);
+      }
+      
+      // 3. Amenity type (if meaningful)
+      if (addr.amenity && 
+          addr.amenity !== "parking" && 
+          !["yes", "residential"].includes(addr.amenity) &&
+          !addressComponents.some(c => c.toLowerCase().includes(addr.amenity.toLowerCase()))) {
+        addressComponents.push(addr.amenity);
+      }
+      
+      // 4. Road/Street
+      const roadName = addr.road || addr.street || addr.pedestrian;
+      if (roadName && !addressComponents.some(c => c.toLowerCase() === roadName.toLowerCase())) {
+        addressComponents.push(roadName);
+      }
+      
+      // 5. Neighbourhood/Suburb (important for Pakistani addresses like H-12, G-10, etc.)
+      const neighbourhood = addr.neighbourhood || addr.suburb || addr.quarter;
+      if (neighbourhood && !addressComponents.some(c => c.toLowerCase() === neighbourhood.toLowerCase())) {
+        addressComponents.push(neighbourhood);
+      }
+      
+      // 6. District/Sector (if we still don't have enough info)
+      if (addressComponents.length < 3) {
+        const district = addr.city_district || addr.district;
+        if (district && !addressComponents.some(c => c.toLowerCase() === district.toLowerCase())) {
+          addressComponents.push(district);
+        }
+      }
+      
+      // Build final address
+      let finalAddress = "";
+      if (addressComponents.length > 0) {
+        finalAddress = addressComponents.slice(0, 4).join(", ");
+      } else {
+        // Fallback to display_name parsing
+        const parts = data.display_name?.split(",").map((p: string) => p.trim()) || [];
+        // For Pakistani addresses, first 2-3 parts are usually most relevant
+        finalAddress = parts.slice(0, Math.min(3, parts.length)).join(", ") || 
+                      data.display_name || 
+                      `${lat}, ${lng}`;
+      }
 
-      // If we have specific parts, use them; otherwise use the specific location from display_name
-      const finalAddress = addressParts.length > 0 
-        ? addressParts.join(", ") 
-        : specificLocation || data.display_name;
+      const city = addr.city || addr.town || addr.municipality || addr.village || addr.state || "Islamabad";
+
+      console.log("✅ Constructed address:", finalAddress);
+      console.log("🏙️ City:", city);
 
       return {
         address: finalAddress,
-        city: addr.city || addr.town || addr.village || addr.municipality || addr.state || "Islamabad",
+        city: city,
       };
     }
 
@@ -155,59 +202,59 @@ export interface FeeStructure {
 }
 
 export function getFeeStructure(distanceKm: number): FeeStructure {
-  // Fee tiers for Pakistan (amounts in PKR)
+  // Fee tiers for Pakistan (amounts in PKR) - Updated to match Pakistani standards
   if (distanceKm <= 5) {
-    // City delivery
+    // City delivery (within city)
     return {
-      baseCharge: 150,
-      perKmCharge: 20,
-      pickupCharge: 50,
-      minCharge: 200,
+      baseCharge: 80,
+      perKmCharge: 8,
+      pickupCharge: 30,
+      minCharge: 100,
       estimatedTime: "30-60 mins",
     };
   } else if (distanceKm <= 10) {
     // Extended city
     return {
-      baseCharge: 200,
-      perKmCharge: 25,
-      pickupCharge: 50,
-      minCharge: 300,
+      baseCharge: 100,
+      perKmCharge: 10,
+      pickupCharge: 30,
+      minCharge: 150,
       estimatedTime: "1-2 hours",
     };
   } else if (distanceKm <= 25) {
-    // Nearby city
+    // Nearby areas
     return {
-      baseCharge: 350,
-      perKmCharge: 30,
-      pickupCharge: 75,
-      minCharge: 500,
+      baseCharge: 150,
+      perKmCharge: 12,
+      pickupCharge: 40,
+      minCharge: 250,
       estimatedTime: "2-3 hours",
     };
   } else if (distanceKm <= 50) {
     // Intercity short
     return {
-      baseCharge: 600,
-      perKmCharge: 35,
-      pickupCharge: 100,
-      minCharge: 800,
+      baseCharge: 250,
+      perKmCharge: 14,
+      pickupCharge: 50,
+      minCharge: 400,
       estimatedTime: "3-5 hours",
     };
   } else if (distanceKm <= 100) {
     // Intercity medium
     return {
-      baseCharge: 1000,
-      perKmCharge: 40,
-      pickupCharge: 150,
-      minCharge: 1500,
+      baseCharge: 400,
+      perKmCharge: 15,
+      pickupCharge: 75,
+      minCharge: 700,
       estimatedTime: "5-8 hours",
     };
   } else {
     // Long distance
     return {
-      baseCharge: 1500,
-      perKmCharge: 45,
-      pickupCharge: 200,
-      minCharge: 2500,
+      baseCharge: 600,
+      perKmCharge: 16,
+      pickupCharge: 100,
+      minCharge: 1200,
       estimatedTime: "1-2 days",
     };
   }

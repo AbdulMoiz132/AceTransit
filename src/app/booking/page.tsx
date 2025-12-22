@@ -127,6 +127,9 @@ export default function Booking() {
               lng: position.coords.longitude,
             };
             
+            console.log("📍 GPS Coordinates:", coords);
+            console.log("📍 GPS Accuracy:", position.coords.accuracy, "meters");
+            
             // Reverse geocode to get actual address
             const locationData = await reverseGeocode(coords);
             
@@ -150,8 +153,13 @@ export default function Booking() {
           },
           (error) => {
             console.error("Location error:", error);
-            alert("Unable to detect location. Please enter manually.");
+            alert("Unable to detect location. Please enter manually or check location permissions.");
             setIsDetectingLocation(false);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
           }
         );
       } else {
