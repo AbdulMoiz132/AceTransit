@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -115,7 +115,7 @@ export default function Payment() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePayment = async () => {
+  const handlePayment = useCallback(async () => {
     setIsProcessing(true);
 
     // Simulate payment processing
@@ -145,7 +145,20 @@ export default function Payment() {
     setTimeout(() => {
       router.push(`/tracking?order=${newOrderId}`);
     }, 3000);
-  };
+  }, [bookingData, selectedMethod, router]);
+
+  useEffect(() => {
+    const onAction = (event: Event) => {
+      const detail = (event as CustomEvent<{ scope: string; action: string }>).detail;
+      if (!detail) return;
+      if (detail.scope !== "payment") return;
+      if (detail.action !== "payment.pay") return;
+      if (isProcessing || isSuccess) return;
+      void handlePayment();
+    };
+    window.addEventListener("tracy:action", onAction);
+    return () => window.removeEventListener("tracy:action", onAction);
+  }, [isProcessing, isSuccess, handlePayment]);
 
   if (!bookingData) {
     return (

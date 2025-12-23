@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -9,6 +9,23 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Card from "@/components/ui/Card";
 import { authService } from "@/lib/auth";
+
+type TracySetFieldDetail = {
+  scope: "booking" | "login" | "signup" | "global";
+  field: string;
+  value: string;
+};
+
+type TracyActionDetail = {
+  scope: "booking" | "login" | "signup" | "global";
+  action:
+    | "booking.next"
+    | "booking.back"
+    | "booking.detectLocation"
+    | "booking.submit"
+    | "login.submit"
+    | "signup.submit";
+};
 
 export default function Login() {
   const router = useRouter();
@@ -20,18 +37,20 @@ export default function Login() {
     password: "",
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const formDataRef = useRef(formData);
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
+
+  const submit = useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
       await authService.signIn({
-        email: formData.email,
-        password: formData.password,
+        email: formDataRef.current.email,
+        password: formDataRef.current.password,
       });
-      
-      // Redirect to dashboard after successful login
+
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
@@ -39,7 +58,35 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  }, [router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submit();
   };
+
+  useEffect(() => {
+    const onSetField = (event: Event) => {
+      const detail = (event as CustomEvent<TracySetFieldDetail>).detail;
+      if (!detail || detail.scope !== "login") return;
+      setFormData((prev) => ({ ...prev, [detail.field]: detail.value }));
+    };
+
+    const onAction = (event: Event) => {
+      const detail = (event as CustomEvent<TracyActionDetail>).detail;
+      if (!detail || detail.scope !== "login") return;
+      if (detail.action === "login.submit") {
+        void submit();
+      }
+    };
+
+    window.addEventListener("tracy:setField", onSetField);
+    window.addEventListener("tracy:action", onAction);
+    return () => {
+      window.removeEventListener("tracy:setField", onSetField);
+      window.removeEventListener("tracy:action", onAction);
+    };
+  }, [submit]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -97,6 +144,7 @@ export default function Login() {
               <Input
                 type="email"
                 placeholder="you@example.com"
+                data-tracy-field="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 leftIcon={<Mail className="h-5 w-5" />}
@@ -112,6 +160,7 @@ export default function Login() {
               <Input
                 type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
+                data-tracy-field="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 leftIcon={<Lock className="h-5 w-5" />}

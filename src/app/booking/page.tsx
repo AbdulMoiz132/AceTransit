@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,6 +32,32 @@ import {
   Coordinates,
   reverseGeocode,
 } from "@/lib/distance";
+
+type TracySetFieldDetail = {
+  scope: "booking" | "login" | "signup" | "global";
+  field: string;
+  value: string;
+};
+
+type TracyActionDetail = {
+  scope: "booking" | "login" | "signup" | "global";
+  action:
+    | "booking.next"
+    | "booking.back"
+    | "booking.detectLocation"
+    | "booking.submit"
+    | "login.submit"
+    | "signup.submit";
+};
+
+type TracyBookingStepDetail = {
+  step: number;
+};
+
+type TracyBookingDetectedLocationDetail = {
+  address: string;
+  city: string;
+};
 
 interface BookingFormData {
   // Sender
@@ -116,7 +142,23 @@ export default function Booking() {
     pickupTime: "",
   });
 
-  const detectLocation = async () => {
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent<TracyBookingStepDetail>("tracy:booking:step", { detail: { step } })
+    );
+  }, [step]);
+
+  const stepRef = useRef(step);
+  const formDataRef = useRef(formData);
+  const deliveryFeeRef = useRef(deliveryFee);
+
+  useEffect(() => {
+    stepRef.current = step;
+    formDataRef.current = formData;
+    deliveryFeeRef.current = deliveryFee;
+  }, [step, formData, deliveryFee]);
+
+  const detectLocation = useCallback(async () => {
     setIsDetectingLocation(true);
     try {
       if ("geolocation" in navigator) {
@@ -140,19 +182,36 @@ export default function Booking() {
                 pickupCity: locationData.city,
                 pickupCoordinates: coords,
               }));
+
+              window.dispatchEvent(
+                new CustomEvent<TracyBookingDetectedLocationDetail>("tracy:booking:detectedLocation", {
+                  detail: { address: locationData.address, city: locationData.city },
+                })
+              );
             } else {
               // Fallback if reverse geocoding fails
+              const fallbackAddress = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+              const fallbackCity = "Pakistan";
               setFormData((prev) => ({
                 ...prev,
-                pickupAddress: `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
-                pickupCity: "Pakistan",
+                pickupAddress: fallbackAddress,
+                pickupCity: fallbackCity,
                 pickupCoordinates: coords,
               }));
+
+              window.dispatchEvent(
+                new CustomEvent<TracyBookingDetectedLocationDetail>("tracy:booking:detectedLocation", {
+                  detail: { address: fallbackAddress, city: fallbackCity },
+                })
+              );
             }
             setIsDetectingLocation(false);
           },
           (error) => {
-            console.error("Location error:", error);
+      console.warn("Location error:", {
+        code: (error as GeolocationPositionError).code,
+        message: (error as GeolocationPositionError).message,
+      });
             alert("Unable to detect location. Please enter manually or check location permissions.");
             setIsDetectingLocation(false);
           },
@@ -170,7 +229,7 @@ export default function Booking() {
       console.error("Error detecting location:", error);
       setIsDetectingLocation(false);
     }
-  };
+  }, []);
 
   // Calculate distance and cost when locations are filled
   useEffect(() => {
@@ -238,23 +297,115 @@ export default function Booking() {
     formData.deliverySpeed,
   ]);
 
-  const handleNext = () => {
-    if (step < 4) {
-      setStep(step + 1);
-    } else {
-      // Save booking data to localStorage for payment page
-      localStorage.setItem("bookingData", JSON.stringify({ formData, deliveryFee }));
-      router.push("/payment");
+  const handleNext = useCallback(() => {
+    const currentStep = stepRef.current;
+    if (currentStep < 4) {
+      setStep(currentStep + 1);
+      return;
     }
-  };
 
-  const handleBack = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    } else {
-      router.back();
+  // Step 4 -> Payment requires calculated fee and distance.
+  const currentForm = formDataRef.current;
+  const currentFee = deliveryFeeRef.current;
+  if (!currentForm.distance || !currentFee) {
+    alert("Please wait for the cost estimate to calculate before proceeding to payment.");
+    return;
+  }
+  if (!currentForm.pickupDate || !currentForm.pickupTime) {
+    alert("Please select pickup date and time before proceeding.");
+    return;
+  }
+
+    // Save booking data to localStorage for payment page
+    localStorage.setItem(
+      "bookingData",
+      JSON.stringify({ formData: currentForm, deliveryFee: currentFee })
+    );
+    router.push("/payment");
+  }, [router]);
+
+  const handleBack = useCallback(() => {
+    const currentStep = stepRef.current;
+    if (currentStep > 1) {
+      setStep(currentStep - 1);
+      return;
     }
-  };
+    router.back();
+  }, [router]);
+
+  useEffect(() => {
+    const onSetField = (event: Event) => {
+      const detail = (event as CustomEvent<TracySetFieldDetail>).detail;
+      if (!detail || detail.scope !== "booking") return;
+
+      setFormData((prev) => {
+        if (detail.field.startsWith("dimensions.")) {
+          const key = detail.field.split(".")[1] as "length" | "width" | "height";
+          if (!key) return prev;
+          return {
+            ...prev,
+            dimensions: {
+              ...prev.dimensions,
+              [key]: detail.value,
+            },
+          };
+        }
+
+        if (detail.field === "deliverySpeed") {
+          const v = detail.value.toLowerCase();
+          const normalized: BookingFormData["deliverySpeed"] =
+            v.includes("fast") ? "fast-track" : v.includes("express") ? "express" : "standard";
+          return { ...prev, deliverySpeed: normalized };
+        }
+
+        if (detail.field === "packageType") {
+          const v = detail.value.toLowerCase();
+          const normalized =
+            v.includes("document")
+              ? "document"
+              : v.includes("fragile")
+                ? "fragile"
+                : v.includes("elect")
+                  ? "electronics"
+                  : v.includes("food")
+                    ? "food"
+                    : "parcel";
+          return { ...prev, packageType: normalized };
+        }
+
+        return { ...prev, [detail.field]: detail.value } as BookingFormData;
+      });
+    };
+
+    const onAction = (event: Event) => {
+      const detail = (event as CustomEvent<TracyActionDetail>).detail;
+      if (!detail || detail.scope !== "booking") return;
+
+      switch (detail.action) {
+        case "booking.next":
+          handleNext();
+          break;
+        case "booking.back":
+          handleBack();
+          break;
+        case "booking.detectLocation":
+          void detectLocation();
+          break;
+        case "booking.submit":
+          handleNext();
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener("tracy:setField", onSetField);
+    window.addEventListener("tracy:action", onAction);
+    return () => {
+      window.removeEventListener("tracy:setField", onSetField);
+      window.removeEventListener("tracy:action", onAction);
+    };
+  }, [detectLocation, handleBack, handleNext]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 pb-24">
@@ -325,6 +476,7 @@ export default function Booking() {
                     </label>
                     <Input
                       placeholder="Enter your name"
+                      data-tracy-field="senderName"
                       value={formData.senderName}
                       onChange={(e) => setFormData({ ...formData, senderName: e.target.value })}
                       leftIcon={<User className="h-5 w-5" />}
@@ -338,6 +490,7 @@ export default function Booking() {
                     <Input
                       type="tel"
                       placeholder="03XX-XXXXXXX"
+                      data-tracy-field="senderPhone"
                       value={formData.senderPhone}
                       onChange={(e) => setFormData({ ...formData, senderPhone: e.target.value })}
                       leftIcon={<Phone className="h-5 w-5" />}
@@ -362,6 +515,7 @@ export default function Booking() {
                     </div>
                     <Input
                       placeholder="House/Building, Street, Area"
+                      data-tracy-field="pickupAddress"
                       value={formData.pickupAddress}
                       onChange={(e) =>
                         setFormData({ ...formData, pickupAddress: e.target.value })
@@ -376,6 +530,7 @@ export default function Booking() {
                     </label>
                     <Input
                       placeholder="e.g., Karachi, Lahore, Islamabad"
+                      data-tracy-field="pickupCity"
                       value={formData.pickupCity}
                       onChange={(e) =>
                         setFormData({ ...formData, pickupCity: e.target.value })
@@ -426,6 +581,7 @@ export default function Booking() {
                     </label>
                     <Input
                       placeholder="Enter receiver's name"
+                      data-tracy-field="receiverName"
                       value={formData.receiverName}
                       onChange={(e) => setFormData({ ...formData, receiverName: e.target.value })}
                       leftIcon={<User className="h-5 w-5" />}
@@ -439,6 +595,7 @@ export default function Booking() {
                     <Input
                       type="tel"
                       placeholder="03XX-XXXXXXX"
+                      data-tracy-field="receiverPhone"
                       value={formData.receiverPhone}
                       onChange={(e) => setFormData({ ...formData, receiverPhone: e.target.value })}
                       leftIcon={<Phone className="h-5 w-5" />}
@@ -451,6 +608,7 @@ export default function Booking() {
                     </label>
                     <Input
                       placeholder="House/Building, Street, Area"
+                      data-tracy-field="dropoffAddress"
                       value={formData.dropoffAddress}
                       onChange={(e) =>
                         setFormData({ ...formData, dropoffAddress: e.target.value })
@@ -465,6 +623,7 @@ export default function Booking() {
                     </label>
                     <Input
                       placeholder="e.g., Karachi, Lahore, Islamabad"
+                      data-tracy-field="dropoffCity"
                       value={formData.dropoffCity}
                       onChange={(e) =>
                         setFormData({ ...formData, dropoffCity: e.target.value })
@@ -533,6 +692,7 @@ export default function Booking() {
                       Package Type
                     </label>
                     <select
+                      data-tracy-field="packageType"
                       value={formData.packageType}
                       onChange={(e) => setFormData({ ...formData, packageType: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
@@ -552,6 +712,7 @@ export default function Booking() {
                     <Input
                       type="number"
                       placeholder="Enter weight"
+                      data-tracy-field="weight"
                       value={formData.weight}
                       onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                       leftIcon={<Weight className="h-5 w-5" />}
@@ -566,6 +727,7 @@ export default function Booking() {
                       <Input
                         type="number"
                         placeholder="Length"
+                        data-tracy-field="dimensions.length"
                         value={formData.dimensions.length}
                         onChange={(e) =>
                           setFormData({
@@ -577,6 +739,7 @@ export default function Booking() {
                       <Input
                         type="number"
                         placeholder="Width"
+                        data-tracy-field="dimensions.width"
                         value={formData.dimensions.width}
                         onChange={(e) =>
                           setFormData({
@@ -588,6 +751,7 @@ export default function Booking() {
                       <Input
                         type="number"
                         placeholder="Height"
+                        data-tracy-field="dimensions.height"
                         value={formData.dimensions.height}
                         onChange={(e) =>
                           setFormData({
@@ -683,6 +847,7 @@ export default function Booking() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
                     <Input
                       type="date"
+                      data-tracy-field="pickupDate"
                       value={formData.pickupDate}
                       onChange={(e) => setFormData({ ...formData, pickupDate: e.target.value })}
                       leftIcon={<Calendar className="h-5 w-5" />}
@@ -693,6 +858,7 @@ export default function Booking() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
                     <Input
                       type="time"
+                      data-tracy-field="pickupTime"
                       value={formData.pickupTime}
                       onChange={(e) => setFormData({ ...formData, pickupTime: e.target.value })}
                       leftIcon={<Clock className="h-5 w-5" />}
@@ -797,7 +963,7 @@ export default function Booking() {
                   !formData.dropoffAddress ||
                   !formData.dropoffCity)) ||
               (step === 3 && !formData.weight) ||
-              (step === 4 && (!formData.pickupDate || !formData.pickupTime))
+			  (step === 4 && (!formData.pickupDate || !formData.pickupTime || !deliveryFee || !formData.distance))
             }
             className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
           >
@@ -808,3 +974,5 @@ export default function Booking() {
     </div>
   );
 }
+
+

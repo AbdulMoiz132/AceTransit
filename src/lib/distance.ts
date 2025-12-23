@@ -201,62 +201,76 @@ export interface FeeStructure {
   estimatedTime: string;
 }
 
+// Pricing adjustment for local market rates.
+// 0.25 means ~75% cheaper overall (requested: reduce by 70–80%).
+const PK_PRICE_MULTIPLIER = 0.25;
+
+function scaleFeeStructure(structure: FeeStructure): FeeStructure {
+  return {
+    ...structure,
+    baseCharge: Math.max(0, Math.round(structure.baseCharge * PK_PRICE_MULTIPLIER)),
+    perKmCharge: Math.max(0, Math.round(structure.perKmCharge * PK_PRICE_MULTIPLIER)),
+    pickupCharge: Math.max(0, Math.round(structure.pickupCharge * PK_PRICE_MULTIPLIER)),
+    minCharge: Math.max(0, Math.round(structure.minCharge * PK_PRICE_MULTIPLIER)),
+  };
+}
+
 export function getFeeStructure(distanceKm: number): FeeStructure {
   // Fee tiers for Pakistan (amounts in PKR) - Updated to match Pakistani standards
   if (distanceKm <= 5) {
     // City delivery (within city)
-    return {
+    return scaleFeeStructure({
       baseCharge: 80,
       perKmCharge: 8,
       pickupCharge: 30,
       minCharge: 100,
       estimatedTime: "30-60 mins",
-    };
+    });
   } else if (distanceKm <= 10) {
     // Extended city
-    return {
+    return scaleFeeStructure({
       baseCharge: 100,
       perKmCharge: 10,
       pickupCharge: 30,
       minCharge: 150,
       estimatedTime: "1-2 hours",
-    };
+    });
   } else if (distanceKm <= 25) {
     // Nearby areas
-    return {
+    return scaleFeeStructure({
       baseCharge: 150,
       perKmCharge: 12,
       pickupCharge: 40,
       minCharge: 250,
       estimatedTime: "2-3 hours",
-    };
+    });
   } else if (distanceKm <= 50) {
     // Intercity short
-    return {
+    return scaleFeeStructure({
       baseCharge: 250,
       perKmCharge: 14,
       pickupCharge: 50,
       minCharge: 400,
       estimatedTime: "3-5 hours",
-    };
+    });
   } else if (distanceKm <= 100) {
     // Intercity medium
-    return {
+    return scaleFeeStructure({
       baseCharge: 400,
       perKmCharge: 15,
       pickupCharge: 75,
       minCharge: 700,
       estimatedTime: "5-8 hours",
-    };
+    });
   } else {
     // Long distance
-    return {
+    return scaleFeeStructure({
       baseCharge: 600,
       perKmCharge: 16,
       pickupCharge: 100,
       minCharge: 1200,
       estimatedTime: "1-2 days",
-    };
+    });
   }
 }
 
